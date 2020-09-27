@@ -1,0 +1,153 @@
+- name: discovery host
+  hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: "host_to_add"
+      prompt: "Address Ip to register"
+      private: no
+
+  tasks:
+    - name: add host to memory inventory
+      ansible.builtin.add_host:
+          name: "{{host_to_add}}" # required. The hostname/ip of the host to add to the inventory, can include a colon and a port number.
+          groups: edge # not required. The groups to add the hostname to, comma separated.
+          ansible_become_password: "{{vault_become_password}}"
+- name: connecting and add sshkey
+  hosts: edge
+  remote_user: david
+  become: yes
+  vars:
+    qiot_user_adm: "adm_da"
+  tasks:
+
+    - name: del {{qiot_user_adm}} user to the edge device
+      ansible.builtin.user:
+        name: "{{qiot_user_adm}}"
+        state: absent
+
+    - name: Allow 'RHEL' group to have passwordless sudo
+      ansible.builtin.lineinfile:
+        dest: /etc/sudoers
+        regexp: '^#'
+        insertafter: '^## Allows people in group wheel to run all commands'
+        line: '%RHEL ALL=(ALL) NOPASSWD: ALL'
+        validate: visudo -cf %s
+
+    - name: add RHEL to the edge device
+      ansible.builtin.group:
+          name: "RHEL"
+          state: present
+
+    - name: add {{qiot_user_adm}} user to the edge device
+      ansible.builtin.user:
+        name: "{{qiot_user_adm}}"
+        state: present
+        comment: "{{qiot_user_adm}} Users" 
+        system: yes
+        uid: 1040
+        groups: 
+            - i2cuser
+            - RHEL
+
+    - name: adding ssh key
+      ansible.posix.authorized_key:
+        user: "{{qiot_user_adm}}"
+        state: present
+        key: "{{vault_key_id}}"
+      register: keys_r
+
+- name: check opened port and deploying openscap for security
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  vars:
+  tasks:
+    - name: update the distro
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: unneeded package
+      ansible.builtin.dnf:
+          autoremove: yes
+
+    - name: open port 8000 for containers comminication
+      ansible.posix.firewalld:
+        port: 8000/tcp
+        permanent: yes
+        state: enabled
+
+    - name: install openscap
+      ansible.builtin.dnf:
+        name: 
+            - openscap-scanner
+            - scap-security-guide
+        state: latest
+
+    - name: run openscap scanner
+      ansible.builtin.shell: oscap-scanner xccdf eval --profile xccdf_org.ssgproject.content_profile_common --report /tmp/report.html /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml
+      ignore_errors: yes
+      register: oscap_var
+
+    - name: retrieve report to folder
+      ansible.builtin.fetch:
+        src: /tmp/report.html
+        dest: /tmp/report.html
+
+    - name: Oscap report exemple
+      community.general.mail:
+        host: 127.0.0.1
+        port: 2025
+        subject: Ansible-report
+        body: Oscap Report
+        from: qiot.fr_fr_utf8@axians.com
+        to:
+          - qiot@redhat.com
+        attach:
+          - /tmp/report.html
+        charset: us-ascii
+      delegate_to: localhost
+
+- name: launch the targeted containers
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  vars:
+    podman_images:
+      - {source:"quay.io/acb-fr/qiot-sensor:1.0.3",username:"", container_name:"qiot-sensor", container_port:"8000:8000"}
+  tasks:
+    - name: retrieve images
+      containers.podman.podman_image:
+        name: "{{item.source}}"
+        username: "{{item.username}}"
+        password: "{{vault_key_quay}}"
+      loop: "{{podman_images}}"
+
+    - name: deploy containers
+      containers.podman.podman_container:
+        name: "{{item.container_name}}"
+        image: "{{item.source}}"
+        state: started
+        ports: "{{item.container_port}}"
+        network:
+          - qiot
+  
+- name: save the configuration
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  tasks:
+
+    - containers.podman.podman_container_info:
+      register: container_info
+    - containers.podman.podman_images_infos:
+      register: images_info
+
+    - ansible.builtin.copy:
+       content: "{{ item | to_nice_yaml }}"
+       dest: /tmp/report_vars
+      loop:
+        - "{{container_info}}"
+        - "{{images_info}}"
+        - "{{ansible_facts}}"
+    

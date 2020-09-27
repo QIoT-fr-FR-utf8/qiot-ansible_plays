@@ -1,0 +1,6 @@
+all:
+    hosts:
+    children:
+        edge:
+            hosts:
+                iot.apprendre-linux.fr:
