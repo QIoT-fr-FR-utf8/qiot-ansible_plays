@@ -1,0 +1,23 @@
+---
+- name: launch the targeted containers
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  vars_files:
+    - group_vars/all.yml
+  tasks:
+    - name: retrieve images
+      containers.podman.podman_image:
+        name: "{{item.source}}"
+        username: "{{item.username}}"
+        password: "{{vault_key_quay}}"
+      loop: "{{podman_images}}"
+
+    - name: deploy containers
+      containers.podman.podman_container:
+        name: "{{item.container_name}}"
+        image: "{{item.source}}"
+        state: started
+        ports: "{{item.container_port}}"
+        network:
+          - qiot

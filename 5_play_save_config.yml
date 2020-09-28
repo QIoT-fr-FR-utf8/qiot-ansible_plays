@@ -1,0 +1,20 @@
+---  
+- name: save the configuration
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  tasks:
+
+    - containers.podman.podman_container_info:
+      register: container_info
+    - containers.podman.podman_images_infos:
+      register: images_info
+
+    - ansible.builtin.copy:
+       content: "{{ item | to_nice_yaml }}"
+       dest: /tmp/report_vars
+      loop:
+        - "{{container_info}}"
+        - "{{images_info}}"
+        - "{{ansible_facts}}"
+    

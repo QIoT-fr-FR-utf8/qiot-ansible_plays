@@ -1,0 +1,36 @@
+- name: check opened port and deploying openscap for security
+  hosts: edge
+  remote_user: adm_da
+  become: yes
+  vars_file:
+    - group_vars/all.yml
+  tasks:
+    - name: update the distro
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: unneeded package
+      ansible.builtin.dnf:
+          autoremove: yes
+
+    - name: open port 8000 for containers comminication
+      ansible.posix.firewalld:
+        port: 8000/tcp
+        permanent: yes
+        state: enabled
+
+    - name: install openscap
+      ansible.builtin.dnf:
+        name: "{{qiot_package}}"
+        state: latest
+
+    - name: run openscap scanner
+      ansible.builtin.shell: oscap-scanner xccdf eval --profile xccdf_org.ssgproject.content_profile_common --report {{oscap_report}} /usr/share/xml/scap/ssg/content/ssg-fedora-ds.xml
+      ignore_errors: yes
+      register: oscap_var
+
+    - name: retrieve report to folder
+      ansible.builtin.fetch:
+        src: "{{oscap_report}}"
+        dest: "{{qiot_oscap_report}}"

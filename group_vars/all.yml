@@ -1,0 +1,25 @@
+---
+qiot_user_adm: "adm_da"
+qiot_package:
+    - openscap-scanner
+    - scap-security-guide
+    - openscap-utils
+group_add:
+    - i2cuser
+    - RHEL
+oscap_report: "/tmp/report.html"
+qiot_oscap_report: "/tmp/report.html"
+
+podman_images:
+    - {source: "quay.io/acb-fr/qiot-sensor:1.0.5", username: "", container_name: "qiot-sensor", container_port: ""}
+    - {source: "quay.io/acb-fr/qiot-edge-service-jvm:latest", username: "", container_name: "qiot-edge-service-jvm", container_port: ""}
+    - {source: "quay.io/acb-fr/qiot-sensor-prom:latest", username: "", container_name: "qiot-sensor-prom", container_port: ""}
+    
+images_info:
+    - "quay.io/acb-fr/qiot-sensor:1.0.5"
+    - "quay.io/acb-fr/qiot-edge-service-jvm:latest"
+    - "quay.io/acb-fr/qiot-sensor-prom:latest"
+container_info:
+    - "qiot-sensor"
+    - "qiot-edge-service-jvm"
+    - "qiot-sensor-prom"

@@ -1,0 +1,41 @@
+- name: connecting and add sshkey
+  hosts: edge
+  remote_user: admin
+  become: yes
+  vars_files:
+    - groups_vars/all.yml
+  tasks:
+
+    - name: Allow 'RHEL' group to have passwordless sudo
+      ansible.builtin.lineinfile:
+        dest: /etc/sudoers
+        regexp: '^#'
+        insertafter: '^## Allows people in group wheel to run all commands'
+        line: '%RHEL ALL=(ALL) NOPASSWD: ALL'
+        validate: visudo -cf %s
+
+    - name: add RHEL to the edge device
+      ansible.builtin.group:
+          name: "RHEL"
+          state: present
+
+    - name: add {{qiot_user_adm}} user to the edge device
+      ansible.builtin.user:
+        name: "{{qiot_user_adm}}"
+        state: present
+        comment: "{{qiot_user_adm}} Users" 
+        system: yes
+        uid: 1040
+        groups: "{{group_add}}"
+
+    - name: adding ssh key
+      ansible.posix.authorized_key:
+        user: "{{qiot_user_adm}}"
+        state: present
+        key: "{{vault_key_id}}"
+      register: keys_r
+
+    - name: del admin user to the edge device
+      ansible.builtin.user:
+        name: admin
+        state: absent

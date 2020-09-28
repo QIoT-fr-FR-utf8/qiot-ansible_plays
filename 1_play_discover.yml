@@ -1,0 +1,14 @@
+- name: discovery host
+  hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: "host_to_add"
+      prompt: "Address Ip to register"
+      private: no
+
+  tasks:
+    - name: add host to memory inventory
+      ansible.builtin.add_host:
+          name: "{{host_to_add}}" # required. The hostname/ip of the host to add to the inventory, can include a colon and a port number.
+          groups: edge # not required. The groups to add the hostname to, comma separated.
+          ansible_become_password: "{{vault_become_password}}"
